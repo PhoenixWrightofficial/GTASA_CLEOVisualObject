@@ -910,7 +910,7 @@ CLEO_Fn(CREATE_VISUAL_OBJECT_FROM_ID)
 CLEO_Fn(CREATE_VISUAL_OBJECT_TO_OBJECT)
 {
     CObject* obj = CPools::GetObject(cleo->ReadParam(handle)->i);
-    char buf[MAX_STR_LEN];
+    char buf[1024];
     cleoaddon->ReadString(handle, buf, sizeof(buf));
     for (int i = 0; buf[i] != 0; ++i) if (buf[i] == '\\') buf[i] = '/';
     float x = cleo->ReadParam(handle)->f;
@@ -928,7 +928,7 @@ CLEO_Fn(CREATE_VISUAL_OBJECT_TO_OBJECT)
 CLEO_Fn(CREATE_VISUAL_OBJECT_TO_VEHICLE)
 {
     CVehicle* veh = CPools::GetVehicle(cleo->ReadParam(handle)->i);
-    char buf[MAX_STR_LEN];
+    char buf[1024];
     cleoaddon->ReadString(handle, buf, sizeof(buf));
     for (int i = 0; buf[i] != 0; ++i) if (buf[i] == '\\') buf[i] = '/';
     float x = cleo->ReadParam(handle)->f;
@@ -945,7 +945,7 @@ CLEO_Fn(CREATE_VISUAL_OBJECT_TO_VEHICLE)
 }
 CLEO_Fn(CREATE_VISUAL_OBJECT_FROM_DFF)
 {
-    char buf[MAX_STR_LEN];
+    char buf[1024];
     cleoaddon->ReadString(handle, buf, sizeof(buf));
     for (int i = 0; buf[i] != 0; ++i) if (buf[i] == '\\') buf[i] = '/';
     float x = cleo->ReadParam(handle)->f;
@@ -1128,7 +1128,7 @@ CLEO_Fn(IS_VISUAL_OBJECT_DFF_NAME)
     VisualObject* visual = (VisualObject*)cleo->ReadParam(handle)->i;
     if (visual)
     {
-        char buf[MAX_STR_LEN];
+        char buf[1024];
         cleoaddon->ReadString(handle, buf, sizeof(buf));
         for (int i = 0; buf[i] != 0; ++i) if (buf[i] == '\\') buf[i] = '/';
         const char* filename = strrchr(buf, '/');
@@ -1250,7 +1250,7 @@ CLEO_Fn(SET_VISUAL_OBJECT_TEXTURE_PNG)
     VisualObject* visual = (VisualObject*)cleo->ReadParam(handle)->i;
     if (visual)
     {
-        char buf[MAX_STR_LEN];
+        char buf[1024];
         cleoaddon->ReadString(handle, buf, sizeof(buf));
         for (int i = 0; buf[i] != 0; ++i) if (buf[i] == '\\') buf[i] = '/';
         int matIndex = cleo->ReadParam(handle)->i;
@@ -1303,7 +1303,7 @@ CLEO_Fn(CHANGE_VISUAL_OBJECT_MODEL_DFF)
     VisualObject* visual = (VisualObject*)cleo->ReadParam(handle)->i;
     if (visual)
     {
-        char buf[MAX_STR_LEN];
+        char buf[1024];
         cleoaddon->ReadString(handle, buf, sizeof(buf));
         for (int i = 0; buf[i] != 0; ++i) if (buf[i] == '\\') buf[i] = '/';
         

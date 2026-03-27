@@ -24,6 +24,13 @@ extern ISAUtils* sautils;
 #include "aml-psdk/game_sa/engine/ModelInfo.h"
 #include "aml-psdk/game_sa/other/Pools.h"
 #include "aml-psdk/game_sa/Events.h"
+#include "aml-psdk/renderware/RwImage.h"
+#include "aml-psdk/renderware/RwTexture.h"
+#include "aml-psdk/renderware/RwRaster.h"
+#include "aml-psdk/game_sa/other/TextureDatabase.h"
+
+#define STB_IMAGE_IMPLEMENTATION
+#include "mod/thirdparty/stb_image.h" // image opcode
 
 #define MAX_STR_LEN 0xFF
 

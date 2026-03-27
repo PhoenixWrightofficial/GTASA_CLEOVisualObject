@@ -2,7 +2,7 @@
 #include <mod/logger.h>
 #include "main.h"
 
-MYMOD(net.teco.visualobject, CLEO VisualObject, 1.0.1, TecoReacvite)
+MYMOD(net.teco.visualobject, CLEO VisualObject, 1.0.2, TecoReacvite)
 NEEDGAME(com.rockstargames.gtasa) // only SA
 BEGIN_DEPLIST()
     ADD_DEPENDENCY_VER(net.rusjj.cleolib, 2.0.1.10)
@@ -36,8 +36,20 @@ void (*RpGeometryForAllMaterials)(RpGeometry*, RpMaterial*(*)(RpMaterial*, void*
 
 RpHAnimHierarchy* (*GetAnimHierarchyFromSkinClump)(RpClump*);
 int (*RpHAnimIDGetIndex)(RpHAnimHierarchy*, int);
-RwMatrix* (*RpHAnimHierarchyGetMatrixArray)(RpHAnimHierarchy*);
 void (*RwV3dTransformPoints)(RwV3d*, RwV3d*, int, RwMatrix*);
+
+int (*FindTxdSlot)(const char*);
+int (*AddTxdSlot)(const char*, const char*, bool);
+bool (*LoadTxd)(int, const char*);
+void (*TxdSlotAddRef)(int);
+void (*SetCurrentTxd)(int, const char*);
+void (*PopCurrentTxd)();
+
+struct MatData
+{
+    uint8_t index;
+    RwTexture* tex;
+};
 
 // inline functions
 inline VisualObject* CreateVisualObjectOnChar(CPed* ped, int modelId, const char* fmt, int bone, float x, float y, float z, float rx, float ry, float rz)
@@ -316,6 +328,46 @@ inline VisualObject* CreateVisualObjectOnWorld(int modelId, const char* fmt, flo
     if (visual) ObjWorld.push_back(visual);
     return visual;
 }
+inline void SetVisualObjectRGBA(VisualObject* visual, uint8_t _red, uint8_t _green, uint8_t _blue, uint8_t _alpha)
+{
+    RwRGBA color = { _red, _green, _blue, _alpha };
+    if (visual->clump)
+    {
+        RpClumpForAllAtomics(visual->clump, [](RpAtomic* atomic, void* data)
+        {
+            RpGeometry* geo = atomic->geometry;
+            if (geo)
+            {
+                geo->flags |= rpGEOMETRYMODULATEMATERIALCOLOR;
+                RpGeometryForAllMaterials(geo, [](RpMaterial *material, void *data)
+                {
+                    RwRGBA newColor = *(RwRGBA*)data;
+                    material->color = newColor;
+                    return material;
+                }, data);
+            }
+            return atomic;
+        }, &color);
+    }
+    else
+    {
+        RpAtomic* atom = visual->atomic;
+        if (!atom) return;
+        
+        RpGeometry* geo = atom->geometry;
+        if (geo) 
+        {
+            geo->flags |= rpGEOMETRYMODULATEMATERIALCOLOR;
+            RpGeometryForAllMaterials(geo, [](RpMaterial *material, void *data)
+            {
+                RwRGBA newColor = *(RwRGBA*)data;
+                material->color = newColor;
+                return material;
+            }, &color);
+        }
+    }
+}
+/*
 inline void ClumpRGBA(RpClump* clump, uint8_t _red, uint8_t _green, uint8_t _blue, uint8_t _alpha)
 {
     if (!clump) return;
@@ -352,7 +404,57 @@ inline void AtomicRGBA(RpAtomic* atomic, uint8_t _red, uint8_t _green, uint8_t _
         }, &color);
     }
 }
-void NoneFunctionLogic(uintptr_t) { return; }
+*/
+inline RwTexture* LoadTextureFromPNG(const char* fmt)
+{
+    RwTexture* pTex = NULL;
+    int width, height, depth, flags;
+    
+    RwImage* pImage = RtPNGImageRead(fmt);
+    if (pImage)
+    {
+        RwImageFindRasterFormat(pImage, rwRASTERTYPETEXTURE, &width, &height, &depth, &flags);
+        RwRaster* pRaster = RwRasterCreate(width, height, depth, rwRASTERTYPETEXTURE);
+        RwRasterSetFromImage(pRaster, pImage);
+        RwImageDestroy(pImage);
+        pTex = RwTextureCreate(pRaster);
+        
+        const char* filename = strrchr(fmt, '/');
+        filename = filename ? filename + 1 : fmt;
+        RwTextureSetName(pTex, filename);
+        
+        RwTextureSetFilterMode(pTex, rwFILTERLINEARMIPLINEAR);
+        RwTextureSetAddressing(pTex, rwTEXTUREADDRESSWRAP);
+    }
+    
+    return pTex;
+}
+inline void SetMaterialIndexTexture(VisualObject* visual, RwTexture* tex, uint8_t index)
+{
+    if (visual->clump)
+    {
+        MatData data;
+        data.index = index;
+        data.tex = tex;
+        
+        RpClumpForAllAtomics(visual->clump, [](RpAtomic* atomic, void* data)
+        {
+            MatData* DataMat = (MatData*)data;
+            RpGeometry* geo = atomic->geometry;
+            if (geo) geo->matList.materials[DataMat->index]->texture = DataMat->tex;
+            return atomic;
+        }, &data);
+    }
+    else
+    {
+        RpAtomic* atom = visual->atomic;
+        if (atom) return;
+        
+        RpGeometry* geo = atom->geometry;
+        if (geo) geo->matList.materials[index]->texture = tex;
+    }
+}
+void NoneFunctionLogic(uintptr_t) { return; } // useless, for version view
 
 // main code
 ON_MOD_LOAD()
@@ -904,14 +1006,7 @@ CLEO_Fn(SET_VISUAL_OBJECT_RGBA)
         uint8_t blue = (uint8_t)cleo->ReadParam(handle)->i;
         uint8_t alpha = (uint8_t)cleo->ReadParam(handle)->i;
         
-        if (visual->clump)
-        {
-            ClumpRGBA(visual->clump, red, green, blue, alpha);
-        }
-        else
-        {
-            AtomicRGBA(visual->atomic, red, green, blue, alpha);
-        }
+        SetVisualObjectRGBA(visual, red, green, blue, alpha);
     }
 }
 CLEO_Fn(IS_VISUAL_OBJECT_VISIBLE)
@@ -1162,6 +1257,121 @@ CLEO_Fn(GET_OFFSET_FROM_VISUAL_OBJECT_IN_WORLD_COORDS)
         cleo->GetPointerToScriptVar(handle)->f = posReturn.z;
     }
 }
+CLEO_Fn(SET_VISUAL_OBJECT_TEXTURE)
+{
+    VisualObject* visual = (VisualObject*)cleo->ReadParam(handle)->i;
+    if (visual)
+    {
+        char buf[MAX_STR_LEN], name[MAX_STR_LEN];
+        cleoaddon->ReadString(handle, buf, sizeof(buf));
+        for (int i = 0; buf[i] != 0; ++i) if (buf[i] == '\\') buf[i] = '/';
+        cleoaddon->ReadString(handle, name, sizeof(name));
+        int matIndex = cleo->ReadParam(handle)->i;
+        
+        const char* filename = strrchr(buf, '/');
+        filename = filename ? filename + 1 : buf;
+        
+        int index = FindTxdSlot(filename);
+        if (index == -1) index = AddTxdSlot(filename, "gta3", false);
+        if (LoadTxd(index, buf))
+        {
+            TxdSlotAddRef(index);
+            SetCurrentTxd(index, NULL);
+            RwTexture* tex = RwTextureRead(name, NULL);
+            SetMaterialIndexTexture(visual, tex, matIndex);
+            PopCurrentTxd();
+        }
+    }
+}
+CLEO_Fn(SET_VISUAL_OBJECT_TEXTURE_PNG)
+{
+    VisualObject* visual = (VisualObject*)cleo->ReadParam(handle)->i;
+    if (visual)
+    {
+        char buf[MAX_STR_LEN];
+        cleoaddon->ReadString(handle, buf, sizeof(buf));
+        for (int i = 0; buf[i] != 0; ++i) if (buf[i] == '\\') buf[i] = '/';
+        int matIndex = cleo->ReadParam(handle)->i;
+        
+        RwTexture* tex = LoadTextureFromPNG(buf);
+        SetMaterialIndexTexture(visual, tex, matIndex);
+    }
+}
+CLEO_Fn(CHANGE_VISUAL_OBJECT_MODEL)
+{
+    VisualObject* visual = (VisualObject*)cleo->ReadParam(handle)->i;
+    if (visual)
+    {
+        int modelId = cleo->ReadParam(handle)->i;
+        
+        CBaseModelInfo* modelInfo = CModelInfo::ms_modelInfoPtrs[modelId];
+        int rwModelType = modelInfo->GetRwModelType();
+        if (rwModelType == 1)
+        {
+            RpAtomic* atomic = (RpAtomic*)modelInfo->m_pRwObject;
+            if (atomic)
+            {
+                modelInfo->AddRef();
+                
+                RwFrame* rwFrame = RwFrameCreate();
+                RpAtomic* rpAtomic = RpAtomicClone(atomic);
+                RpAtomicSetFrame(rpAtomic, rwFrame);
+                
+                visual->atomic = rpAtomic;
+                visual->frame = rwFrame;
+            }
+        }
+        else
+        {
+            RpClump* clump = (RpClump*)modelInfo->m_pRwObject;
+            if (clump)
+            {
+                modelInfo->AddRef();
+                
+                RpClump* rpClump = (RpClump*)reinterpret_cast<CClumpModelInfo*>(modelInfo)->CreateInstance();
+                
+                visual->clump = rpClump;
+                visual->renderType = CLUMP_RENDERER;
+            }
+        }
+    }
+}
+CLEO_Fn(CHANGE_VISUAL_OBJECT_MODEL_DFF)
+{
+    VisualObject* visual = (VisualObject*)cleo->ReadParam(handle)->i;
+    if (visual)
+    {
+        char buf[MAX_STR_LEN];
+        cleoaddon->ReadString(handle, buf, sizeof(buf));
+        for (int i = 0; buf[i] != 0; ++i) if (buf[i] == '\\') buf[i] = '/';
+        
+        RwStream* stream = RwStreamOpen(rwSTREAMFILENAME, rwSTREAMREAD, buf);
+        if (stream)
+        {
+            if (RwStreamFindChunk(stream, 16, 0, 0))
+            {
+                RpClump* clump = RpClumpStreamRead(stream);
+                if (clump)
+                {
+                    RpAtomic* atomic = GetFirstAtomic(clump);
+                    if (atomic)
+                    {
+                        RwFrame* frame = RwFrameCreate();
+                        RpAtomicSetFrame(atomic, frame);
+                        RwFrameUpdateObjects(frame);
+                        
+                        visual->atomic = atomic;
+                        visual->frame = frame;
+                        const char* filename = strrchr(buf, '/');
+                        filename = filename ? filename + 1 : buf;
+                        strcpy(visual->dff_name, filename);
+                    }
+                }
+            }
+            RwStreamClose(stream, 0);
+        }
+    }
+}
 //--------------------[ END OPCODES ]----------------------
 
 ON_MOD_PRELOAD()
@@ -1191,14 +1401,21 @@ ON_MOD_PRELOAD()
     SET_TO(RpClumpStreamRead, aml->GetSym(hGTASA, "_Z17RpClumpStreamReadP8RwStream"));
     SET_TO(RpClumpForAllAtomics, aml->GetSym(hGTASA, "_Z20RpClumpForAllAtomicsP7RpClumpPFP8RpAtomicS2_PvES3_"));
     
-    // Geometry
+    // RpGeometry
     SET_TO(RpGeometryForAllMaterials, aml->GetSym(hGTASA, "_Z25RpGeometryForAllMaterialsP10RpGeometryPFP10RpMaterialS2_PvES3_"));
     
     // RpHAnimHierarchy
     SET_TO(GetAnimHierarchyFromSkinClump, aml->GetSym(hGTASA, "_Z29GetAnimHierarchyFromSkinClumpP7RpClump"));
     SET_TO(RpHAnimIDGetIndex, aml->GetSym(hGTASA, "_Z17RpHAnimIDGetIndexP16RpHAnimHierarchyi"));
-    SET_TO(RpHAnimHierarchyGetMatrixArray, aml->GetSym(hGTASA, "_Z30RpHAnimHierarchyGetMatrixArrayP16RpHAnimHierarchy"));
     SET_TO(RwV3dTransformPoints, aml->GetSym(hGTASA, "_Z20RwV3dTransformPointsP5RwV3dPKS_iPK11RwMatrixTag"));
+    
+    // TxdStore
+    SET_TO(FindTxdSlot, aml->GetSym(hGTASA, "_ZN9CTxdStore11FindTxdSlotEPKc"));
+    SET_TO(AddTxdSlot, aml->GetSym(hGTASA, "_ZN9CTxdStore10AddTxdSlotEPKcS1_b"));
+    SET_TO(LoadTxd, aml->GetSym(hGTASA, "_ZN9CTxdStore7LoadTxdEiPKc"));
+    SET_TO(TxdSlotAddRef, aml->GetSym(hGTASA, "_ZN9CTxdStore6AddRefEi"));
+    SET_TO(SetCurrentTxd, aml->GetSym(hGTASA, "_ZN9CTxdStore13SetCurrentTxdEiPKc"));
+    SET_TO(PopCurrentTxd, aml->GetSym(hGTASA, "_ZN9CTxdStore13PopCurrentTxdEv"));
 }
 
 ON_ALL_MODS_LOAD()
@@ -1211,35 +1428,43 @@ ON_ALL_MODS_LOAD()
         return;
     }
     
-    /* Opcode range [6000 - 601D] */
-    CLEO_RegisterOpcode(0x6000, CREATE_VISUAL_OBJECT_TO_CHAR_BONE);             // 6000=10,%10d% = create_visual_object_to_char_bone %1d% from_dff %2d% bone %3d% offset %4d% %5d% %6d% rotation %7d% %8d% %9d%
-    CLEO_RegisterOpcode(0x6001, SET_VISUAL_OBJECT_SCALE);                       // 6001=4,set_visual_object_scale %1d% scale %2d% %3d% %4d%
-    CLEO_RegisterOpcode(0x6002, DELETE_VISUAL_OBJECT);                          // 6002=1,delete_visual_object %1d%
-    CLEO_RegisterOpcode(0x6003, SET_VISUAL_OBJECT_AUTO_HIDE);                   // 6003=4,set_visual_object_auto_hide %1d% dead_state %2d% weapon_state %3d% car_state %4d%
-    CLEO_RegisterOpcode(0x6004, SET_VISUAL_OBJECT_VISIBLE);                     // 6004=2,set_visual_object_visible %1d% visible %2d%
-    CLEO_RegisterOpcode(0x6005, SET_VISUAL_OBJECT_OFFSET);                      // 6005=4,set_visual_object_offset %1d% offset %2d% %3d% %4d%
-    CLEO_RegisterOpcode(0x6006, SET_VISUAL_OBJECT_ROTATION);                    // 6006=4,set_visual_object_rotation %1d% rotation %2d% %3d% %4d%
-    CLEO_RegisterOpcode(0x6007, SET_VISUAL_OBJECT_DISTORTION);                  // 6007=5,set_visual_object_distortion %1d% distortion %2d% %3d% %4d% %5d%
-    CLEO_RegisterOpcode(0x6008, SWITCH_VISUAL_OBJECT_RENDERER);                 // 6008=2,switch_visual_object_renderer %1d% render_mode %2d%
-    CLEO_RegisterOpcode(0x6009, CREATE_VISUAL_OBJECT_TO_CHAR_BONE_FROM_ID);     // 6009=10,%10d% = create_visual_object_to_char_bone %1d% model_id %2d% bone %3d% offset %4d% %5d% %6d% rotation %7d% %8d% %9d%
-    CLEO_RegisterOpcode(0x600A, CREATE_VISUAL_OBJECT_TO_OBJECT_FROM_ID);        // 600A=9,%9d% = create_visual_object_to_object %1d% model_id %2d% offset %3d% %4d% %5d% rotation %6d% %7d% %8d%
-    CLEO_RegisterOpcode(0x600B, CREATE_VISUAL_OBJECT_TO_VEHICLE_FROM_ID);       // 600B=9,%9d% = create_visual_object_to_vehicle %1d% model_id %2d% offset %3d% %4d% %5d% rotation %6d% %7d% %8d%
-    CLEO_RegisterOpcode(0x600C, CREATE_VISUAL_OBJECT_FROM_ID);                  // 600C=8,%8d% = create_visual_object_model_id %1d% offset %2d% %3d% %4d% rotation %5d% %6d% %7d%
-    CLEO_RegisterOpcode(0x600D, CREATE_VISUAL_OBJECT_TO_OBJECT);                // 600D=9,%9d% = create_visual_object_to_object %1d% from_dff %2d% offset %3d% %4d% %5d% rotation %6d% %7d% %8d%
-    CLEO_RegisterOpcode(0x600E, CREATE_VISUAL_OBJECT_TO_VEHICLE);               // 600E=9,%9d% = create_visual_object_to_vehicle %1d% from_dff %2d% offset %3d% %4d% %5d% rotation %6d% %7d% %8d%
-    CLEO_RegisterOpcode(0x600F, CREATE_VISUAL_OBJECT_FROM_DFF);                 // 600F=8,%8d% = create_visual_object_from_dff %1d% offset %2d% %3d% %4d% rotation %5d% %6d% %7d%
-    CLEO_RegisterOpcode(0x6010, SET_VISUAL_OBJECT_RGBA);                        // 6010=5,set_visual_object %1d% RGBA %2d% %3d% %4d% %5d%
-    CLEO_RegisterOpcode(0x6011, IS_VISUAL_OBJECT_VISIBLE);                      // 6011=1,is_visual_object_visible %1d%
-    CLEO_RegisterOpcode(0x6012, IS_VISUAL_OBJECT_CREATED);                      // 6012=1,is_visual_object_created %1d%
-    CLEO_RegisterOpcode(0x6013, DELETE_ALL_VISUAL_OBJECT_FROM_CHAR);            // 6013=1,delete_all_visual_objects_from_char %1d% //NOT GLOBAL
-    CLEO_RegisterOpcode(0x6014, DELETE_ALL_VISUAL_OBJECT_FROM_VEHICLE);         // 6014=1,delete_all_visual_objects_from_vehicle %1d% //NOT GLOBAL
-    CLEO_RegisterOpcode(0x6015, DELETE_ALL_VISUAL_OBJECT_FROM_OBJECT);          // 6015=1,delete_all_visual_objects_from_object %1d% //NOT GLOBAL
-    CLEO_RegisterOpcode(0x6016, GET_VISUAL_OBJECT_MODEL_ID);                    // 6016=2,%2d% = get_visual_object_model_id %1d%
-    CLEO_RegisterOpcode(0x6017, GET_VISUAL_OBJECT_DFF_NAME);                    // 6017=2,%2d% = get_visual_object_dff_name %1d%
-    CLEO_RegisterOpcode(0x6018, IS_VISUAL_OBJECT_MODEL_ID);                     // 6018=2,is_visual_object %1d% model_id %2d%
-    CLEO_RegisterOpcode(0x6019, IS_VISUAL_OBJECT_DFF_NAME);                     // 6019=2,is_visual_object %1d% dff_name %2d%
-    CLEO_RegisterOpcode(0x601A, IS_VISUAL_OBJECT_PED_ATTACHED);                 // 601A=2,is_visual_object %1d% attached_to_char %2d%
-    CLEO_RegisterOpcode(0x601B, IS_VISUAL_OBJECT_VEHICLE_ATTACHED);             // 601B=2,is_visual_object %1d% attached_to_vehicle %2d%
-    CLEO_RegisterOpcode(0x601C, IS_VISUAL_OBJECT_OBJECT_ATTACHED);              // 601C=2,is_visual_object %1d% attached_to_object %2d%
-    CLEO_RegisterOpcode(0x601D, GET_OFFSET_FROM_VISUAL_OBJECT_IN_WORLD_COORDS); // 601D=7,store_coords_to %1d% %2d% %3d% from_visual_object %4d% with_offset %5d% %6d% %7d%
+    /* Opcode range [6000 - 6021] */
+    CLEO_RegisterOpcode(0x6000, CREATE_VISUAL_OBJECT_TO_CHAR_BONE);               // 6000=10,%10d% = create_visual_object_to_char_bone %1d% from_dff %2d% bone %3d% offset %4d% %5d% %6d% rotation %7d% %8d% %9d%
+    CLEO_RegisterOpcode(0x6001, SET_VISUAL_OBJECT_SCALE);                         // 6001=4,set_visual_object_scale %1d% scale %2d% %3d% %4d%
+    CLEO_RegisterOpcode(0x6002, DELETE_VISUAL_OBJECT);                            // 6002=1,delete_visual_object %1d%
+    CLEO_RegisterOpcode(0x6003, SET_VISUAL_OBJECT_AUTO_HIDE);                     // 6003=4,set_visual_object_auto_hide %1d% dead_state %2d% weapon_state %3d% car_state %4d%
+    CLEO_RegisterOpcode(0x6004, SET_VISUAL_OBJECT_VISIBLE);                       // 6004=2,set_visual_object_visible %1d% visible %2d%
+    CLEO_RegisterOpcode(0x6005, SET_VISUAL_OBJECT_OFFSET);                        // 6005=4,set_visual_object_offset %1d% offset %2d% %3d% %4d%
+    CLEO_RegisterOpcode(0x6006, SET_VISUAL_OBJECT_ROTATION);                      // 6006=4,set_visual_object_rotation %1d% rotation %2d% %3d% %4d%
+    CLEO_RegisterOpcode(0x6007, SET_VISUAL_OBJECT_DISTORTION);                    // 6007=5,set_visual_object_distortion %1d% distortion %2d% %3d% %4d% %5d%
+    CLEO_RegisterOpcode(0x6008, SWITCH_VISUAL_OBJECT_RENDERER);                   // 6008=2,switch_visual_object_renderer %1d% render_mode %2d%
+    CLEO_RegisterOpcode(0x6009, CREATE_VISUAL_OBJECT_TO_CHAR_BONE_FROM_ID);       // 6009=10,%10d% = create_visual_object_to_char_bone %1d% model_id %2d% bone %3d% offset %4d% %5d% %6d% rotation %7d% %8d% %9d%
+    CLEO_RegisterOpcode(0x600A, CREATE_VISUAL_OBJECT_TO_OBJECT_FROM_ID);          // 600A=9,%9d% = create_visual_object_to_object %1d% model_id %2d% offset %3d% %4d% %5d% rotation %6d% %7d% %8d%
+    CLEO_RegisterOpcode(0x600B, CREATE_VISUAL_OBJECT_TO_VEHICLE_FROM_ID);         // 600B=9,%9d% = create_visual_object_to_vehicle %1d% model_id %2d% offset %3d% %4d% %5d% rotation %6d% %7d% %8d%
+    CLEO_RegisterOpcode(0x600C, CREATE_VISUAL_OBJECT_FROM_ID);                    // 600C=8,%8d% = create_visual_object_model_id %1d% at_coord %2d% %3d% %4d% rotation %5d% %6d% %7d%
+    CLEO_RegisterOpcode(0x600D, CREATE_VISUAL_OBJECT_TO_OBJECT);                  // 600D=9,%9d% = create_visual_object_to_object %1d% from_dff %2d% offset %3d% %4d% %5d% rotation %6d% %7d% %8d%
+    CLEO_RegisterOpcode(0x600E, CREATE_VISUAL_OBJECT_TO_VEHICLE);                 // 600E=9,%9d% = create_visual_object_to_vehicle %1d% from_dff %2d% offset %3d% %4d% %5d% rotation %6d% %7d% %8d%
+    CLEO_RegisterOpcode(0x600F, CREATE_VISUAL_OBJECT_FROM_DFF);                   // 600F=8,%8d% = create_visual_object_from_dff %1d% at_coord %2d% %3d% %4d% rotation %5d% %6d% %7d%
+    CLEO_RegisterOpcode(0x6010, SET_VISUAL_OBJECT_RGBA);                          // 6010=5,set_visual_object %1d% RGBA %2d% %3d% %4d% %5d%
+    CLEO_RegisterOpcode(0x6011, IS_VISUAL_OBJECT_VISIBLE);                        // 6011=1,is_visual_object_visible %1d%
+    CLEO_RegisterOpcode(0x6012, IS_VISUAL_OBJECT_CREATED);                        // 6012=1,is_visual_object_created %1d%
+    CLEO_RegisterOpcode(0x6013, DELETE_ALL_VISUAL_OBJECT_FROM_CHAR);              // 6013=1,delete_all_visual_objects_from_char %1d% //NOT GLOBAL
+    CLEO_RegisterOpcode(0x6014, DELETE_ALL_VISUAL_OBJECT_FROM_VEHICLE);           // 6014=1,delete_all_visual_objects_from_vehicle %1d% //NOT GLOBAL
+    CLEO_RegisterOpcode(0x6015, DELETE_ALL_VISUAL_OBJECT_FROM_OBJECT);            // 6015=1,delete_all_visual_objects_from_object %1d% //NOT GLOBAL
+    
+    // since 1.0.1
+    CLEO_RegisterOpcode(0x6016, GET_VISUAL_OBJECT_MODEL_ID);                      // 6016=2,%2d% = get_visual_object_model_id %1d%
+    CLEO_RegisterOpcode(0x6017, GET_VISUAL_OBJECT_DFF_NAME);                      // 6017=2,%2d% = get_visual_object_dff_name %1d%
+    CLEO_RegisterOpcode(0x6018, IS_VISUAL_OBJECT_MODEL_ID);                       // 6018=2,is_visual_object %1d% model_id %2d%
+    CLEO_RegisterOpcode(0x6019, IS_VISUAL_OBJECT_DFF_NAME);                       // 6019=2,is_visual_object %1d% dff_name %2d%
+    CLEO_RegisterOpcode(0x601A, IS_VISUAL_OBJECT_PED_ATTACHED);                   // 601A=2,is_visual_object %1d% attached_to_char %2d%
+    CLEO_RegisterOpcode(0x601B, IS_VISUAL_OBJECT_VEHICLE_ATTACHED);               // 601B=2,is_visual_object %1d% attached_to_vehicle %2d%
+    CLEO_RegisterOpcode(0x601C, IS_VISUAL_OBJECT_OBJECT_ATTACHED);                // 601C=2,is_visual_object %1d% attached_to_object %2d%
+    CLEO_RegisterOpcode(0x601D, GET_OFFSET_FROM_VISUAL_OBJECT_IN_WORLD_COORDS);   // 601D=7,store_coords_to %1d% %2d% %3d% from_visual_object %4d% with_offset %5d% %6d% %7d%
+    
+    // since 1.0.2
+    CLEO_RegisterOpcode(0x601E, SET_VISUAL_OBJECT_TEXTURE);                       // 601E=4,set_visual_object_texture %1d% from_txd %2d% texture_name %3d% material_index %4d%
+    CLEO_RegisterOpcode(0x601F, SET_VISUAL_OBJECT_TEXTURE_PNG);                   // 601F=3,set_visual_object_texture %1d% from_png %2d% material_index %3d% //Not all PNG can be loaded
+    CLEO_RegisterOpcode(0x6020, CHANGE_VISUAL_OBJECT_MODEL);                      // 6020=2,replace_visual_object_model %1d% with_model_from_id %2d%
+    CLEO_RegisterOpcode(0x6021, CHANGE_VISUAL_OBJECT_MODEL_DFF);                  // 6021=2,replace_visual_object_model %1d% with_model_from_dff %2d%
 }

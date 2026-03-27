@@ -21,10 +21,10 @@ With this plugin:
 6009=10,%10d% = create_visual_object_to_char_bone %1d% model_id %2d% bone %3d% offset %4d% %5d% %6d% rotation %7d% %8d% %9d%
 600A=9,%9d% = create_visual_object_to_object %1d% model_id %2d% offset %3d% %4d% %5d% rotation %6d% %7d% %8d%
 600B=9,%9d% = create_visual_object_to_vehicle %1d% model_id %2d% offset %3d% %4d% %5d% rotation %6d% %7d% %8d%
-600C=8,%8d% = create_visual_object_model_id %1d% offset %2d% %3d% %4d% rotation %5d% %6d% %7d%
+600C=8,%8d% = create_visual_object_model_id %1d% at_coord %2d% %3d% %4d% rotation %5d% %6d% %7d%
 600D=9,%9d% = create_visual_object_to_object %1d% from_dff %2d% offset %3d% %4d% %5d% rotation %6d% %7d% %8d%
 600E=9,%9d% = create_visual_object_to_vehicle %1d% from_dff %2d% offset %3d% %4d% %5d% rotation %6d% %7d% %8d%
-600F=8,%8d% = create_visual_object_from_dff %1d% offset %2d% %3d% %4d% rotation %5d% %6d% %7d%
+600F=8,%8d% = create_visual_object_from_dff %1d% at_coord %2d% %3d% %4d% rotation %5d% %6d% %7d%
 6010=5,set_visual_object %1d% RGBA %2d% %3d% %4d% %5d%
 6011=1,is_visual_object_visible %1d%
 6012=1,is_visual_object_created %1d%
@@ -41,8 +41,14 @@ With this plugin:
 601B=2,is_visual_object %1d% attached_to_vehicle %2d%
 601C=2,is_visual_object %1d% attached_to_object %2d%
 601D=7,store_coords_to %5d% %6d% %7d% from_visual_object %1d% with_offset %2d% %3d% %4d%
+
+; Visual Object 1.0.2
+601E=4,set_visual_object_texture %1d% from_txd %2d% texture_name %3d% material_index %4d%
+601F=3,set_visual_object_texture %1d% from_png %2d% material_index %3d% //Not all PNG can be loaded
+6020=2,replace_visual_object_model %1d% with_model_from_id %2d%
+6021=2,replace_visual_object_model %1d% with_model_from_dff %2d%
 ```
-[Download Page 🔗](<https://google.com>)
+[Download Page 🔗](<https://tecoreacvitemoddinggarage.blogspot.com/2026/02/plugin-cleo-visual-object.html>)
 
 ## License 📜
 ```txt

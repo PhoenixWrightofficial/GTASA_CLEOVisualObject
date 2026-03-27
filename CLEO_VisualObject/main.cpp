@@ -367,44 +367,6 @@ inline void SetVisualObjectRGBA(VisualObject* visual, uint8_t _red, uint8_t _gre
         }
     }
 }
-/*
-inline void ClumpRGBA(RpClump* clump, uint8_t _red, uint8_t _green, uint8_t _blue, uint8_t _alpha)
-{
-    if (!clump) return;
-    RwRGBA color = { _red, _green, _blue, _alpha };
-    RpClumpForAllAtomics(clump, [](RpAtomic* atomic, void* data)
-    {
-        RpGeometry* geo = atomic->geometry;
-        if (geo)
-        {
-            geo->flags |= rpGEOMETRYMODULATEMATERIALCOLOR;
-            RpGeometryForAllMaterials(geo, [](RpMaterial *material, void *data)
-            {
-                RwRGBA newColor = *(RwRGBA*)data;
-                material->color = newColor;
-                return material;
-            }, data);
-        }
-        return atomic;
-    }, &color);
-}
-inline void AtomicRGBA(RpAtomic* atomic, uint8_t _red, uint8_t _green, uint8_t _blue, uint8_t _alpha)
-{
-    if (!atomic) return;
-    RwRGBA color = { _red, _green, _blue, _alpha };
-    RpGeometry* geo = atomic->geometry;
-    if (geo)
-    {
-        geo->flags |= rpGEOMETRYMODULATEMATERIALCOLOR;
-        RpGeometryForAllMaterials(geo, [](RpMaterial *material, void *data)
-        {
-            RwRGBA newColor = *(RwRGBA*)data;
-            material->color = newColor;
-            return material;
-        }, &color);
-    }
-}
-*/
 inline RwTexture* LoadTextureFromPNG(const char* fmt)
 {
     RwTexture* pTex = NULL;

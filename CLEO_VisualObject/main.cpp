@@ -410,7 +410,7 @@ inline void SetMaterialIndexTexture(VisualObject* visual, RwTexture* tex, uint8_
     else
     {
         RpAtomic* atom = visual->atomic;
-        if (atom) return;
+        if (!atom) return;
         
         RpGeometry* geo = atom->geometry;
         if (geo) geo->matList.materials[index]->texture = tex;
@@ -705,7 +705,7 @@ ON_MOD_LOAD()
 CLEO_Fn(CREATE_VISUAL_OBJECT_TO_CHAR_BONE)
 {
     CPed* ped = CPools::GetPed(cleo->ReadParam(handle)->i);
-    char buf[MAX_STR_LEN];
+    char buf[1024];
     cleoaddon->ReadString(handle, buf, sizeof(buf));
     for (int i = 0; buf[i] != 0; ++i) if (buf[i] == '\\') buf[i] = '/';
     int boneId = cleo->ReadParam(handle)->i;
@@ -1224,7 +1224,7 @@ CLEO_Fn(SET_VISUAL_OBJECT_TEXTURE)
     VisualObject* visual = (VisualObject*)cleo->ReadParam(handle)->i;
     if (visual)
     {
-        char buf[MAX_STR_LEN], name[MAX_STR_LEN];
+        char buf[1024], name[MAX_STR_LEN];
         cleoaddon->ReadString(handle, buf, sizeof(buf));
         for (int i = 0; buf[i] != 0; ++i) if (buf[i] == '\\') buf[i] = '/';
         cleoaddon->ReadString(handle, name, sizeof(name));

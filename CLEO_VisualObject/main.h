@@ -29,9 +29,6 @@ extern ISAUtils* sautils;
 #include "aml-psdk/renderware/RwRaster.h"
 #include "aml-psdk/game_sa/other/TextureDatabase.h"
 
-#define STB_IMAGE_IMPLEMENTATION
-#include "mod/thirdparty/stb_image.h" // image opcode
-
 #define MAX_STR_LEN 0xFF
 
 #include "VisualObject.h"

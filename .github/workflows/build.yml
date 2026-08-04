@@ -1,0 +1,41 @@
+name: Build CLEO VisualObject
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Android NDK
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r26d
+
+      - name: Build
+        working-directory: CLEO_VisualObject
+        run: |
+          $ANDROID_NDK_ROOT/ndk-build NDK_PROJECT_PATH=. APP_BUILD_SCRIPT=Android.mk
+
+      - name: Upload .so
+        uses: actions/upload-artifact@v4
+        with:
+          name: CLEOVisualObject
+          path: |
+            CLEO_VisualObject/libs/**/*.so
+            CLEO_VisualObject/obj/local/**/*.so
